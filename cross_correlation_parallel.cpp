@@ -4,6 +4,7 @@
 #include <tuple>
 #include <utility>
 #include <fstream>
+#include <filesystem>
 
 #include <opencv2/opencv.hpp>
 
@@ -11,10 +12,36 @@
 #include <mpi.h>
 #include <omp.h>
 
+namespace fs = std::filesystem;
+
+std::string make_output_path(const std::string &template_path, int frame_index) {
+    fs::path p(template_path);
+    if (p.has_parent_path()) {
+        fs::create_directories(p.parent_path());
+    }
+
+    std::string parent = p.parent_path().string();
+    std::string ext = p.extension().string();
+    std::string stem = p.stem().string();
+    std::string file_name = parent + "/" + stem + "_" + std::to_string(frame_index) + ext;
+    if (p.has_parent_path()) {
+        fs::create_directories(p.parent_path());
+    }
+    return file_name;
+}
+
+bool ensure_parent_dir(const std::string &path) {
+    fs::path p(path);
+    if (p.has_parent_path()) {
+        return fs::create_directories(p.parent_path());
+    }
+    return true;
+}
+
 
 std::pair<cv::Mat, cv::Mat> load_image(cv::Mat before_img, cv::Mat after_img, int size){
+    
     // crops the video from the center
-
     if ((before_img.rows != after_img.rows) || (before_img.cols != after_img.cols)){
         throw std::runtime_error("Dimention mismatch!");
     }
@@ -95,11 +122,14 @@ int main(int argc, char* argv[]){
     std::string save_V_pth   = argv[3];
     std::string save_img_pth = argv[4];
     int         skip         = std::stoi(argv[5]);
-    
 
-    
+    if (rank == 0){
+        ensure_parent_dir(save_U_pth);
+        ensure_parent_dir(save_V_pth);
+        ensure_parent_dir(save_img_pth);
+    }
+    MPI_Barrier(MPI_COMM_WORLD);
 
-    
     const int NN = 1000;
     const int N = 15;
     const int N_window_result = 2*N-1;
@@ -135,7 +165,7 @@ int main(int argc, char* argv[]){
     double start = MPI_Wtime();
     while (cap.read(frame_after)){
 
-        if (currentFrame >= stop_frame && rank != size - 1){ // making last rank doe left over work
+        if (currentFrame >= stop_frame && rank != size - 1){ // making last rank do left over work
             break;
         }
 
@@ -150,9 +180,11 @@ int main(int argc, char* argv[]){
         cv::Mat before_img = imgs.first;
         cv::Mat after_img = imgs.second;
 
-        std::string save_img_pth_2 = save_img_pth;
-
-        cv::imwrite(save_img_pth_2.insert(save_img_pth_2.size() - 4, "_" + std::to_string(currentFrame)), before_img);
+        std::string image_path = make_output_path(save_img_pth, currentFrame);
+        if (!cv::imwrite(image_path, before_img)) {
+            std::cerr << "ERROR: Failed to save image to " << image_path << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
 
         // unsigned char Before[NN][NN], After[NN][NN];
         std::vector<std::vector<unsigned char>> Before(NN, std::vector<unsigned char>(NN));
@@ -166,11 +198,15 @@ int main(int argc, char* argv[]){
             }
         }
 
-        std::string u_file = save_U_pth;
-        std::string v_file = save_V_pth;
+        std::string u_file = make_output_path(save_U_pth, currentFrame);
+        std::string v_file = make_output_path(save_V_pth, currentFrame);
 
-        std::ofstream u_outFile(u_file.insert(u_file.size() - 4, "_" + std::to_string(currentFrame)));
-        std::ofstream v_outFile(v_file.insert(v_file.size() - 4, "_" + std::to_string(currentFrame)));
+        std::ofstream u_outFile(u_file);
+        std::ofstream v_outFile(v_file);
+        if (!u_outFile.is_open() || !v_outFile.is_open()) {
+            std::cerr << "ERROR: Unable to open output files: " << u_file << " or " << v_file << std::endl;
+            MPI_Abort(MPI_COMM_WORLD, -1);
+        }
 
         
         int W1[N][N];
@@ -178,7 +214,7 @@ int main(int argc, char* argv[]){
 
         int shift_down, shift_right;
         
-        #pragma omp parallel for collapse(2) schedule(dynamic) private(W1, W2)
+        #pragma omp parallel for collapse(2) schedule(dynamic) private(W1, W2, shift_down, shift_right)
         for (int iy = 0; iy < ny; iy++){
             for (int ix = 0; ix < nx; ix++){
 
@@ -227,6 +263,7 @@ int main(int argc, char* argv[]){
             }
             // u_outFile << "\n";
             // v_outFile << "\n";
+            #pragma omp critical
             printf("RANK: %d/%d | FRAME: %d/%d| COLUMNS: %d/%d\n", rank, size, currentFrame, totalFrames, shift_down, NN-N);
         }
 
@@ -246,6 +283,10 @@ int main(int argc, char* argv[]){
     }
     MPI_Finalize();
     double end = MPI_Wtime();
-    printf("\n########################\n\n\nTime: %f seconds\n\n\n############", end - start);
+
+    if (rank == 0){
+        printf("\n########################\n\n\nTime: %f seconds\n\n\n############", end - start);
+    }
+
     return 0;
 }
