@@ -61,6 +61,7 @@ if frame_count == 0:
     print(f"No valid velocity frames found in '{args.velocity_folder}' for maximum_frames={args.maximum_frames}.")
     sys.exit(1)
 
+os.makedirs("/".join(args.save_path.split("/")[:-1]), exist_ok=True)
 video_name = args.save_path
 fourcc = cv2.VideoWriter_fourcc(*'mp4v')
 

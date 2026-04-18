@@ -4,6 +4,8 @@
 #include <tuple>
 #include <utility>
 #include <fstream>
+#include <filesystem>
+#include <chrono>
 
 #include <opencv2/opencv.hpp>
 
@@ -67,6 +69,20 @@ std::pair<int, int> shift(int rows, int cols, std::tuple<int, int, int> argmax_v
     return {dx, dy};
 }
 
+std::string make_output_path(std::string template_path, int frame_index){
+    std::filesystem::path p(template_path);
+    if (p.has_parent_path()){
+        std::filesystem::create_directories(p.parent_path());
+    }
+
+    std::string parent = p.parent_path().string();
+    std::string ext = p.extension().string();
+    std::string stem = p.stem().string();
+    std::string file_name = parent + "/" + stem + "_" + std::to_string(frame_index) + ext;
+
+    return file_name;
+}
+
 
 
 // main
@@ -88,9 +104,10 @@ int main(int argc, char* argv[]){
     
     
     const int NN = 1000;
-    const int N = 21;
+    const int N = 15;
     const int N_window_result = 2*N-1;
 
+    auto start = std::chrono::steady_clock::now();
 
     // cv::VideoCapture cap(video_pth); 
     cv::VideoCapture cap(video_pth, cv::CAP_FFMPEG);
@@ -117,9 +134,8 @@ int main(int argc, char* argv[]){
         cv::Mat before_img = imgs.first;
         cv::Mat after_img = imgs.second;
 
-        std::string save_img_pth_2 = save_img_pth;
 
-        cv::imwrite(save_img_pth_2.insert(save_img_pth_2.size() - 4, "_" + std::to_string(frameCount)), before_img);
+        cv::imwrite(make_output_path(save_img_pth, frameCount-1), before_img);
 
         // unsigned char Before[NN][NN], After[NN][NN];
         std::vector<std::vector<unsigned char>> Before(NN, std::vector<unsigned char>(NN));
@@ -132,12 +148,8 @@ int main(int argc, char* argv[]){
             }
         }
 
-        std::string u_file = save_U_pth;
-        std::string v_file = save_V_pth;
-
-        std::ofstream u_outFile(u_file.insert(u_file.size() - 4, "_" + std::to_string(frameCount)));
-        std::ofstream v_outFile(v_file.insert(v_file.size() - 4, "_" + std::to_string(frameCount)));
-
+        std::ofstream u_outFile(make_output_path(save_U_pth, frameCount-1));
+        std::ofstream v_outFile(make_output_path(save_V_pth, frameCount-1));
         
         int W1[N][N];
         int W2[N][N];
@@ -192,6 +204,9 @@ int main(int argc, char* argv[]){
         std::swap(frame_before, frame_after);
 
     }
-    
+
+    auto end = std::chrono::steady_clock::now();
+    auto duration = std::chrono::duration_cast<std::chrono::seconds>(end - start);
+    printf("\n########################\n\n\nTime: %lld seconds\n\n\n############", duration.count());
     return 0;
 }

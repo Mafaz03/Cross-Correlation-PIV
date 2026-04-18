@@ -2,8 +2,10 @@
 #include <filesystem>
 
 int main(){
-    std::filesystem::create_directories("wow");
-    std::filesystem::path p("wow/yikes.txt");
+    std::filesystem::path p("wow/meowy/ikes.txt");
+    if (p.has_parent_path()) {
+        std::filesystem::create_directories(p.parent_path());
+    }
 
     std::string parent = p.parent_path().string();
 
