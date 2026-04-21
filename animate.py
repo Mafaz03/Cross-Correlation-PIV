@@ -12,11 +12,13 @@ import argparse
 
 parser = argparse.ArgumentParser(description="Process files.")
 
-parser.add_argument("-im_f",  "--image_folder",    type=str, default="Images",           help="image folder save path")
-parser.add_argument("-v_f",   "--velocity_folder", type=str, default="Velocities",       help="velocity folder save path")
-parser.add_argument("-m_f",   "--maximum_frames",  type=int, default=510,                help="Maximum number of frames")
-parser.add_argument("-fps",   "--fps",             type=int, default=24,                 help="fps")
-parser.add_argument("-s_pth", "--save_path",       type=str, default="output_video.mp4", help="Video save path")
+parser.add_argument("-im_f",  "--image_folder",    type=str,   default="Images",           help="image folder save path")
+parser.add_argument("-v_f",   "--velocity_folder", type=str,   default="Velocities",       help="velocity folder save path")
+parser.add_argument("-m_f",   "--maximum_frames",  type=int,   default=510,                help="Maximum number of frames")
+parser.add_argument("-fps",   "--fps",             type=int,   default=24,                 help="fps")
+parser.add_argument("-s_pth", "--save_path",       type=str,   default="output_video.mp4", help="Video save path")
+parser.add_argument('-p_2_m', "--pixel_to_meter",   type=float, required=True) # 0.000198019802
+parser.add_argument("-dt",   "--dt",               type=float, help="time between frames (seconds)") # 0.002941176471
 
 args = parser.parse_args()
 
@@ -42,6 +44,10 @@ for s in range(args.maximum_frames):
 
     U = np.loadtxt(u_path)
     V = np.loadtxt(v_path)
+
+    scale = args.pixel_to_meter / args.dt  # x / t
+    U = U * scale
+    V = V * scale
 
     speed = np.sqrt(U**2 + V**2)
 
@@ -84,6 +90,10 @@ for s in tqdm(range(0, args.maximum_frames, 1)):
         U = np.loadtxt(u_path)
         V = np.loadtxt(v_path)
 
+        scale = args.pixel_to_meter / args.dt  # x / t
+        U = U * scale
+        V = V * scale
+
         img = np.array(
             Image.open(img_path)
             .convert("RGB")
@@ -124,14 +134,18 @@ for s in tqdm(range(0, args.maximum_frames, 1)):
         # 5️. Quiver
         # axs[4].imshow(img, extent=[0, 1, 1, 0], alpha=0.5)
 
-        step = 5
+        step = 1
+        mag = np.sqrt(U**2 + V**2)
+        mag[mag == 0] = 1
+        U_norm = U / mag
+        V_norm = V / mag
         axs[4].quiver(
             X[::step, ::step],
             Y[::step, ::step],
-            U[::step, ::step],
-            -V[::step, ::step],
+            U_norm[::step, ::step],
+            -V_norm[::step, ::step],
             color='black',
-            scale=10   
+            scale=20  # adjust visually
         )
         axs[4].set_title("Quiver")
         axs[4].invert_yaxis()

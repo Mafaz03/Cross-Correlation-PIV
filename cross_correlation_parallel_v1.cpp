@@ -147,11 +147,12 @@ void process_frames(cv::Mat frame_before, cv::Mat frame_after,
 
     int shift_down, shift_right;
 
-    std::vector<std::vector<int>> R(N_window_result, std::vector<int>(N_window_result, 0));
     
     #pragma omp parallel for collapse(2) schedule(dynamic) private(W1, W2, shift_down, shift_right) num_threads(num_thread)
     for (int iy = 0; iy < ny; iy++){
         for (int ix = 0; ix < nx; ix++){
+
+            std::vector<std::vector<int>> R(N_window_result, std::vector<int>(N_window_result, 0));
 
             shift_down  = iy * step;
             shift_right = ix * step;
@@ -312,7 +313,7 @@ int main(int argc, char* argv[]){
     double end = MPI_Wtime();
 
     if (rank == 0){
-        printf("\n########################\n\n\nTime: %f seconds\n\n\n######################## end - start);
+        printf("\n########################\n\n\nTime: %f seconds\n\n\n########################", end - start);
     }
 
     return 0;
