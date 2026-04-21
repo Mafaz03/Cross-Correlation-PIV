@@ -1,8 +1,5 @@
-*.dat
-*.png
-*.jpg
-*.jpeg
 .env
+Data/*
 
 .DS_Store
 Clips
